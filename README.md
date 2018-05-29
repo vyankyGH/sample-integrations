@@ -5,5 +5,8 @@ This repo includes curated addons that can be used in Nirmata. The images for th
 Storage:
 - NFS
 
+Ingress Controller:
+- Nginx 
+
 Logging:
 - Elasticsearch-Fluentd-Kibana (EFK)
