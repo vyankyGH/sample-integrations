@@ -191,7 +191,7 @@ spec:
       serviceAccountName: haproxy-ingress-serviceaccount
       containers:
       - name: haproxy-ingress
-        image: quay.io/jcmoraisjr/haproxy-ingress
+        image: nirmata/haproxy-ingress:latest
         args:
         - --default-backend-service=$(POD_NAMESPACE)/ingress-default-backend
         - --default-ssl-certificate=$(POD_NAMESPACE)/tls-secret
