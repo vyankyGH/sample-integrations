@@ -6,6 +6,18 @@ metadata:
 kind: ConfigMap
 apiVersion: v1
 data:
+    balance-algorithm: "leastconn"
+    drain-support: "true"
+    use-proxy-protcol: "true"
+    proxy-body-size: "100m"
+    ssl-redirect: "true"
+    timeout-connect: "5s"
+    timeout-http-request: "300s"
+    timeout-queue: "300s"
+    timeout-server: "300s"
+    timeout-server-fin: "300s"
+    syslog-endpoint: "localhost:514"
+    http-log-format: 
     dynamic-scaling: "true"
     backend-server-slots-increment: "4"
 metadata:
