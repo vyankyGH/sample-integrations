@@ -1,0 +1,283 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-haproxy
+---
+kind: ConfigMap
+apiVersion: v1
+data:
+    balance-algorithm: "leastconn"
+    drain-support: "true"
+    use-proxy-protcol: "true"
+    proxy-body-size: "100m"
+    ssl-redirect: "true"
+    timeout-connect: "5s"
+    timeout-http-request: "300s"
+    timeout-queue: "300s"
+    timeout-server: "300s"
+    timeout-server-fin: "300s"
+    syslog-endpoint: "localhost:514"
+    http-log-format: default
+    dynamic-scaling: "true"
+    backend-server-slots-increment: "4"
+metadata:
+  name: haproxy-configmap
+  namespace: ingress-haproxy
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: haproxy-ingress-serviceaccount
+  namespace: ingress-haproxy
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: haproxy-ingress-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - endpoints
+      - nodes
+      - pods
+      - secrets
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "extensions"
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+        - events
+    verbs:
+        - create
+        - patch
+  - apiGroups:
+      - "extensions"
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: haproxy-ingress-role
+  namespace: ingress-haproxy
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - pods
+      - secrets
+      - namespaces
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: haproxy-ingress-role-nisa-binding
+  namespace: ingress-haproxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: haproxy-ingress-role
+subjects:
+  - kind: ServiceAccount
+    name: haproxy-ingress-serviceaccount
+    namespace: ingress-haproxy
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: haproxy-ingress-clusterrole-nisa-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: haproxy-ingress-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: haproxy-ingress-serviceaccount
+    namespace: ingress-haproxy
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: ingress-default-backend
+  name: ingress-default-backend
+  namespace: ingress-haproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: ingress-default-backend
+  template:
+    metadata:
+      labels:
+        run: ingress-default-backend
+    spec:
+      containers:
+        - name: ingress-default-backend
+          image: gcr.io/google_containers/defaultbackend:1.0
+          ports:
+          - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: ingress-default-backend
+  name: ingress-default-backend
+  namespace: ingress-haproxy
+spec:
+  ports:
+  - name: port-1
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: ingress-default-backend
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: haproxy-ingress
+  namespace: ingress-haproxy
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      run: haproxy-ingress
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: haproxy-ingress
+    spec:
+      containers:
+      - name: access-log
+        image: nirmata/netcat:alpine-3.8.2
+        ports:
+        - name: udp
+          containerPort: 514
+          protocol: UDP
+        args: ["-ul","514"]
+      - args:
+        - --default-backend-service=$(POD_NAMESPACE)/ingress-default-backend
+        - --default-ssl-certificate=$(POD_NAMESPACE)/tls-secret
+        - --configmap=$(POD_NAMESPACE)/haproxy-configmap
+        - --reload-strategy=native
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: nirmata/haproxy-ingress:latest
+        imagePullPolicy: Always
+        name: haproxy-ingress
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+        - containerPort: 1936
+          name: stat
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: haproxy-ingress-serviceaccount
+      serviceAccountName: haproxy-ingress-serviceaccount
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: haproxy-ingress
+  name: haproxy-ingress
+  namespace: ingress-haproxy
+spec:
+  type: NodePort
+  ports:
+  - name: port-1
+    port: 80
+    protocol: TCP
+    targetPort: 80
+    nodePort: 30080
+  - name: port-2
+    port: 443
+    protocol: TCP
+    targetPort: 443
+    nodePort: 30443
+  - name: port-3
+    port: 1936
+    protocol: TCP
+    targetPort: 1936
+    nodePort: 31936
+  selector:
+    run: haproxy-ingress
