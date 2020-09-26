@@ -157,8 +157,8 @@ data:
           type: none
           use_kiali_token: false
           username: ""
-        custom_metrics_url: http://prometheus:9090
-        url: http://prometheus:9090
+        custom_metrics_url: http://prometheus-prometheus.nirmata-monitoring:9090
+        url: http://prometheus-prometheus.nirmata-monitoring:9090
       tracing:
         auth:
           ca_file: ""
