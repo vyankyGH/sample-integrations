@@ -1615,3 +1615,25 @@ spec:
       spans: 6
       metricName: "vertx_http_server_bytesReceived"
       dataType: "histogram"
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  labels:
+    app.kubernetes.io/name: "istio-system"
+    app.kubernetes.io/instance: "istio"
+    app.kubernetes.io/component: "deployment.kiali"
+spec:
+  externalIPs: []
+  externalTrafficPolicy: "Cluster"
+  healthCheckNodePort: 0
+  loadBalancerSourceRanges: []
+  sessionAffinity: "None"
+  type: "LoadBalancer"
+  selector:
+    app.kubernetes.io/component: "deployment.kiali"
+  ports:
+  - name: "kiali-lb"
+    port: 20001
+    protocol: "TCP"
+    targetPort: 20001
