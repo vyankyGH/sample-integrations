@@ -7,7 +7,7 @@ data:
     plugins = /var/lib/grafana/plugins\nprovisioning = /etc/grafana/provisioning\n"
 binaryData: {}
 metadata:
-  namespace: "nirmata-monitoring"
+  namespace: "prometheus-git"
   annotations: {}
   name: "grafana"
   labels:
